@@ -60,8 +60,15 @@ func (store *Store) get(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	id := ps.ByName("id")
 	data, err := store.DB.Get([]byte(id), nil)
 
+	if err == leveldb.ErrNotFound {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("404"))
+		return
+	}
 	if err != nil {
-		fmt.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("500"))
+		return
 	}
 
 	var view View
