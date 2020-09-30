@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>iiif.link</title>
+    [[ if .Data ]]
+    <meta property="og:title" content="[[ .Label ]]" />
+    <meta property="og:image" content="[[ .Image ]]" />
+    [[ end ]]
+    <link
+      type="text/css"
+      rel="stylesheet"
+      href="//unpkg.com/bootstrap/dist/css/bootstrap.min.css"
+    />
+    <link
+      type="text/css"
+      rel="stylesheet"
+      href="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.css"
+    />
+    <script src="//unpkg.com/vue@latest/dist/vue.min.js"></script>
+    <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js"></script>
+    <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue-icons.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/openseadragon/2.4.2/openseadragon.min.js"></script>
+    <style>
+      html,
+      body {
+        background-color: #ccc;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+          "Segoe UI Symbol";
+      }
+      #manifest {
+        min-height: 2vh;
+      }
+      #thumbgallery {
+        min-height: 100px;
+        overflow-y: hidden;
+      }
+      #browser {
+        min-height: 14vh;
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+        align-items: center;
+        margin: 5px;
+        padding: 5px;
+      }
+      #browser img {
+        margin-right: 15px;
+        display: block;
+      }
+      a .b-icon {
+        color: #fff;
+      }
+      .permalink {
+        color: #fff;
+        margin-right: 8px;
+        font-style: underline;
+      }
+      #manifest {
+        width: 600px !important;
+      }
+      .active {
+        outline: 3px solid #000;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <b-navbar toggleable="lg" type="dark" variant="secondary">
+        <b-navbar-brand href="#">iiif.link</b-navbar-brand>
+
+        <b-navbar-nav>
+          <b-nav-form @submit="openmanifest">
+            <b-form-input
+              id="manifest"
+              size="sm"
+              class="mr-sm-2"
+              placeholder=""
+              v-model="current_view.manifest"
+            ></b-form-input>
+            <b-button size="sm" class="my-2 my-sm-0" type="submit">
+              Load IIIF Manifest
+              <b-spinner v-if="loading" small></b-spinner>
+            </b-button>
+          </b-nav-form>
+        </b-navbar-nav>
+        <b-navbar-nav class="ml-auto">
+          <template v-if="current_view.canvas">
+            <span class="permalink">{{ link }}</span>
+            <a href="#" @click="save()"><b-icon icon="share-fill"></b-icon></a>
+          </template>
+        </b-navbar-nav>
+      </b-navbar>
+      <div id="browser">
+        <span v-for="(canvas, index) in canvases" v-bind:key="canvas[0]">
+          <a
+            href="#"
+            @click="opencanvas(canvas.images[0].resource.service['@id'], index)"
+          >
+            <img height="100" v-bind:id="'page'+index"
+            v-bind:class="{active:index === current_view.page}"
+            v-bind:src=`${canvas.images[0].resource.service['@id']}/full/,100/0/default.jpg`
+            />
+          </a>
+        </span>
+      </div>
+      <div id="viewer" style="width: calc(100vw-20px); height: 80vh"></div>
+    </div>
+    <script>
+      var app = new Vue({
+        el: "#app",
+        data() {
+          return {
+            current_view: {
+              label: null,
+              manifest: "https://iiif.edl.beniculturali.it/10965/manifest",
+              canvas: null,
+              page: null,
+              viewport: { x: null, y: null },
+              zoom: null,
+              bounds: {
+                x: null,
+                y: null,
+                w: null,
+                h: null,
+              },
+            },
+            canvases: null,
+            viewer: null,
+            link: null,
+            loaded: false,
+            loading: false,
+            saved_view: {},
+          };
+        },
+        mounted() {
+          this.initosd();
+          [[ if .Data ]]
+          this.saved_view = JSON.parse('[[ .Data ]]');
+          this.current_view.manifest = this.saved_view.manifest;
+          this.current_view.page = this.saved_view.page;
+          this.openmanifest();
+          this.opencanvas(this.saved_view.canvas, this.saved_view.page);
+          this.loaded = true;
+          [[ end ]]
+        },
+        methods: {
+          openmanifest(e) {
+            if (e) {
+              e.preventDefault();
+            }
+            this.loading = true;
+            fetch(this.current_view.manifest)
+              .then((response) => response.json())
+              .then((data) => {
+                this.current_view.label = data.label;
+                this.canvases = data.sequences[0].canvases;
+                this.loading = false;
+              });
+          },
+          save() {
+            fetch("/save", {
+              method: "POST",
+              body: JSON.stringify(this.current_view),
+            })
+              .then((response) => response.text())
+              .then((data) => {
+                this.link = `https://iiif.link/id/${data}`;
+                window.history.pushState("", "", `/id/${data}`);
+              });
+          },
+          initosd() {
+            var self = this;
+            this.viewer = window.OpenSeadragon({
+              id: "viewer",
+              prefixUrl:
+                "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/2.4.2/images/",
+              tileSources: [],
+              minZoomLevel: -1,
+              maxZoomLevel: 10,
+            });
+
+            this.viewer.addHandler("zoom", function (event) {
+              self.current_view.zoom = event.zoom;
+              var center = event.eventSource.viewport.getCenter();
+              self.current_view.viewport.x = center.x;
+              self.current_view.viewport.y = center.y;
+
+              var bounds = event.eventSource.viewport.viewportToImageRectangle(
+                event.eventSource.viewport.getBounds()
+              );
+              self.current_view.bounds = {
+                x: Math.trunc(bounds.x),
+                y: Math.trunc(bounds.y),
+                w: Math.trunc(bounds.width),
+                h: Math.trunc(bounds.height),
+              };
+            });
+
+            this.viewer.addHandler("pan", function (event) {
+              self.current_view.viewport.x = event.center.x;
+              self.current_view.viewport.y = event.center.y;
+
+              var bounds = event.eventSource.viewport.viewportToImageRectangle(
+                event.eventSource.viewport.getBounds()
+              );
+
+              self.current_view.bounds = {
+                x: Math.trunc(bounds.x),
+                y: Math.trunc(bounds.y),
+                w: Math.trunc(bounds.width),
+                h: Math.trunc(bounds.height),
+              };
+            });
+
+            this.viewer.addHandler("open", function () {
+              if (self.loaded) {
+                self.viewer.viewport.zoomTo(self.saved_view.zoom);
+                self.viewer.viewport.panTo(
+                  new OpenSeadragon.Point(
+                    parseFloat(self.saved_view.viewport.x, 10),
+                    parseFloat(self.saved_view.viewport.y, 10)
+                  )
+                );
+              }
+            });
+          },
+          opencanvas(id, page) {
+            this.viewer.open(`${id}/info.json`);
+            this.current_view.canvas = id;
+            this.current_view.page = page;
+            setTimeout(function () {
+              document.getElementById(`page${page}`).scrollIntoView();
+            }, 500);
+          },
+        },
+      });
+    </script>
+  </body>
+</html>
