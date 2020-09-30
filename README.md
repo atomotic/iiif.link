@@ -20,11 +20,14 @@ A `HEAD` request on a link display some data with _X-Iiif_ headers
 
 ## QA
 
-Q: Wasn't [IIIF Region](https://iiif.io/api/image/3.0/#41-region) linking enough?  
-A: Requesting IIIF images with the region parameter returns only the underlying content as a static image, without the context of the manifest where the image belongs or metadata.
+**Q**: Wasn't [IIIF Region](https://iiif.io/api/image/3.0/#41-region) linking enough?  
+**A**: Requesting IIIF images with the region parameter returns only the underlying content as a static image, without the context of the manifest where the image belongs or metadata.
 
-Q: Wasn't [WEB Annotations](https://iiif.io/api/presentation/3.0/#56-annotation) enough?  
-A: Annotations cannot be natively shared and referenced with just a browser. You need an external library, like [Annona](https://ncsu-libraries.github.io/annona/) components, to view the annotation.
+**Q**: Wasn't [WEB Annotations](https://iiif.io/api/presentation/3.0/#56-annotation) enough?  
+**A**: Annotations cannot be natively shared and referenced with just a browser. You need an external library, like [Annona](https://ncsu-libraries.github.io/annona/) components, to view the annotation.
+
+**Q**: Those URLs are long and ugly.  
+**A**: I didn't want to use an auto incremental integer, neither bake my own logic to generate unique identifier. [ksuid](https://github.com/segmentio/ksuid) library is used here.
 
 # Install and run
 
@@ -33,7 +36,7 @@ A: Annotations cannot be natively shared and referenced with just a browser. You
 
 Open http://localhost:8080
 
-## Todo
+# Todo
 
 - The viewer is quite simple. Could be improved (also to support Manifest version 3.0)
 - Metadata from manifest should be displayed.
