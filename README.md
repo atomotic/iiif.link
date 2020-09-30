@@ -18,7 +18,15 @@ A `HEAD` request on a link display some data with _X-Iiif_ headers
     X-Iiif-Manifest: https://iiif.edl.beniculturali.it/10965/manifest
     X-Iiif-Page: 11
 
-## Install and run
+## QA
+
+Q: Wasn't [IIIF Region](https://iiif.io/api/image/3.0/#41-region) linking enough?  
+A: Requesting IIIF images with the region parameter returns only the underlying content as a static image, without the context of the manifest where the image belongs or metadata.
+
+Q: Wasn't [WEB Annotations](https://iiif.io/api/presentation/3.0/#56-annotation) enough?  
+A: Annotations cannot be natively shared and referenced with just a browser. You need an external library, like [Annona](https://ncsu-libraries.github.io/annona/) components, to view the annotation.
+
+# Install and run
 
     go build
     ./iiif.link
