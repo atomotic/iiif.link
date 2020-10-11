@@ -7,6 +7,9 @@
     [[ if .Data ]]
     <meta property="og:title" content="[[ .Label ]]" />
     <meta property="og:image" content="[[ .Image ]]" />
+    <script id="saved_view" type="application/json">
+      [[ .Data ]]
+    </script>
     [[ end ]]
     <link
       type="text/css"
@@ -139,7 +142,7 @@
         mounted() {
           this.initosd();
           [[ if .Data ]]
-          this.saved_view = JSON.parse('[[ .Data ]]');
+          this.saved_view = JSON.parse(document.getElementById('saved_view').textContent);
           this.current_view.manifest = this.saved_view.manifest;
           this.current_view.page = this.saved_view.page;
           this.openmanifest();
@@ -156,7 +159,12 @@
             fetch(this.current_view.manifest)
               .then((response) => response.json())
               .then((data) => {
-                this.current_view.label = data.label;
+                if (typeof data.label === "object" && data.label !== null) {
+                  this.current_view.label = data.label["@value"];
+                } else {
+                  this.current_view.label = data.label;
+                }
+
                 this.canvases = data.sequences[0].canvases;
                 this.loading = false;
               });
