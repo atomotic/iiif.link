@@ -86,6 +86,48 @@ func (store *Store) get(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	tmpl.Execute(w, Output{Data: string(data), Label: view.Label, Image: image})
 }
 
+func (store *Store) getstate(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	id := ps.ByName("id")
+
+	data, err := store.DB.Get([]byte(id), nil)
+
+	if err == leveldb.ErrNotFound {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("404"))
+		return
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("500"))
+		return
+	}
+
+	var view View
+	json.Unmarshal(data, &view)
+
+	out := &ContentState{
+		Context:    "http://iiif.io/api/presentation/0/context.json",
+		ID:         fmt.Sprintf("https://iiif.link/id/%s", id),
+		Type:       "Annotation",
+		Motivation: []string{"contentState"},
+		Target: Target{
+			ID: fmt.Sprintf("%s#xywh=%d,%d,%d,%d", view.Canvas,
+				*view.Bounds.X, *view.Bounds.Y, *view.Bounds.W, *view.Bounds.H),
+			Type: "Canvas",
+			PartOf: []Parts{
+				Parts{
+					ID:   view.Manifest,
+					Type: "Manifest",
+				},
+			},
+		},
+	}
+	state, _ := json.Marshal(out)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(state)
+
+}
+
 func (store *Store) header(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	id := ps.ByName("id")
 	data, err := store.DB.Get([]byte(id), nil)
@@ -152,6 +194,7 @@ func main() {
 
 	router := httprouter.New()
 	router.GET("/", index)
+	router.GET("/id/:id/json", store.getstate)
 	router.GET("/id/:id", store.get)
 	router.HEAD("/id/:id", store.header)
 	router.POST("/save", store.save)
