@@ -3,13 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>iiif.link</title>
     [[ if .Data ]]
+    <title>iiif.link — [[ .Label ]]</title>
     <meta property="og:title" content="[[ .Label ]]" />
     <meta property="og:image" content="[[ .Image ]]" />
     <script id="saved_view" type="application/json">
       [[ .Data ]]
     </script>
+    [[ else ]]
+    <title>iiif.link</title>
     [[ end ]]
     <link
       type="text/css"
