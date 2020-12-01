@@ -17,6 +17,9 @@ A `HEAD` request on a link display some data with _X-Iiif_ headers
     X-Iiif-Label: De Sphaera. Sphaerae coelestis et planetarum descriptio
     X-Iiif-Manifest: https://iiif.edl.beniculturali.it/10965/manifest
     X-Iiif-Page: 11
+    
+A `/json` request on a link return a [Content State](https://iiif.io/api/content-state/0.3/) json, eg: [https://iiif.link/id/1iDriW37eDJad8SmVPzCW1DYLrJ/json](https://iiif.link/id/1iDriW37eDJad8SmVPzCW1DYLrJ/json)
+    
 
 ## QA
 
@@ -28,6 +31,11 @@ A `HEAD` request on a link display some data with _X-Iiif_ headers
 
 **Q**: Those URLs are long and ugly.  
 **A**: I didn't want to use an auto incremental integer, neither bake my own logic to generate unique identifier. [ksuid](https://github.com/segmentio/ksuid) library is used here.
+
+**Q**: Does exists a standard IIIF Api for this need?  
+**A**: Yes, there is a working progress: [IIIF Content State API](https://iiif.io/api/content-state/0.3/). An good introduction here: [What is IIIF Content State?](https://tom-crane.medium.com/what-is-iiif-content-state-dd15a543939f)
+
+
 
 # Install and run
 
@@ -41,4 +49,3 @@ Open http://localhost:8080
 - The viewer is quite simple. Could be improved (also to support Manifest version 3.0)
 - Metadata from manifest should be displayed.
 - Make `/embed/{id}` to share the view within an iframe
-- Make `/id/{id}.json` to export a Web Annotation json
