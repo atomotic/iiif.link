@@ -1,51 +1,40 @@
-# iiif.link
+# create-svelte
 
-A kind of "url shortener" for sharing a view on an IIIF image region (using [Openseadragon](https://openseadragon.github.io/) viewer).
+Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/master/packages/create-svelte).
 
-Demo at [https://iiif.link](https://iiif.link): open a manifest, select a page, zoom and pan to desired detail, and click share. A unique URL will be generated that can be shared over the internet; upon opening the URL the viewer will open at the saved zoom and position.
+## Creating a project
 
-Opengraph meta tags allows a preview of the image region with the manifest label. Try to paste an [example link](https://iiif.link/id/1iDriW37eDJad8SmVPzCW1DYLrJ) into a chat
+If you're seeing this, you've probably already done this step. Congrats!
 
-![](https://docuver.se/tmp/iiif.link-preview.png).
+```bash
+# create a new project in the current directory
+npm init svelte@next
 
-A `HEAD` request on a link display some data with _X-Iiif_ headers
+# create a new project in my-app
+npm init svelte@next my-app
+```
 
-    curl -I https://iiif.link/id/1iDriW37eDJad8SmVPzCW1DYLrJ
-    ...
-    X-Iiif-Canvas: https://jarvis.edl.beniculturali.it/images/iiif/db/791b6aaf-af7c-4e2e-955a-51715d1c83e0
-    X-Iiif-Image: https://jarvis.edl.beniculturali.it/images/iiif/db/791b6aaf-af7c-4e2e-955a-51715d1c83e0/35,168,1703,788/,100/0/default.jpg
-    X-Iiif-Label: De Sphaera. Sphaerae coelestis et planetarum descriptio
-    X-Iiif-Manifest: https://iiif.edl.beniculturali.it/10965/manifest
-    X-Iiif-Page: 11
-    
-A `/json` request on a link return a [Content State](https://iiif.io/api/content-state/0.3/) json, eg: [https://iiif.link/id/1iDriW37eDJad8SmVPzCW1DYLrJ/json](https://iiif.link/id/1iDriW37eDJad8SmVPzCW1DYLrJ/json)
-    
+> Note: the `@next` is temporary
 
-## QA
+## Developing
 
-**Q**: Wasn't [IIIF Region](https://iiif.io/api/image/3.0/#41-region) linking enough?  
-**A**: Requesting IIIF images with the region parameter returns only the underlying content as a static image, without the context of the manifest where the image belongs or metadata.
+Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
 
-**Q**: Wasn't [WEB Annotations](https://iiif.io/api/presentation/3.0/#56-annotation) enough?  
-**A**: Annotations cannot be natively shared and referenced with just a browser. You need an external library, like [Annona](https://ncsu-libraries.github.io/annona/) components, to view the annotation.
+```bash
+npm run dev
 
-**Q**: Those URLs are long and ugly.  
-**A**: I didn't want to use an auto incremental integer, neither bake my own logic to generate unique identifier. [ksuid](https://github.com/segmentio/ksuid) library is used here.
+# or start the server and open the app in a new browser tab
+npm run dev -- --open
+```
 
-**Q**: Does exists a standard IIIF Api for this need?  
-**A**: Yes, there is a working progress: [IIIF Content State API](https://iiif.io/api/content-state/0.3/). An good introduction here: [What is IIIF Content State?](https://tom-crane.medium.com/what-is-iiif-content-state-dd15a543939f)
+## Building
 
+To create a production version of your app:
 
+```bash
+npm run build
+```
 
-# Install and run
+You can preview the production build with `npm run preview`.
 
-    go build
-    ./iiif.link
-
-Open http://localhost:8080
-
-# Todo
-
-- The viewer is quite simple. Could be improved (also to support Manifest version 3.0)
-- Metadata from manifest should be displayed.
-- Make `/embed/{id}` to share the view within an iframe
+> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
