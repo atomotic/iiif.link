@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/tify.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>iiif.link</title>
+    <script type="module" crossorigin src="/tify.js"></script>
+    <link rel="stylesheet" crossorigin href="/tify.css" />
+    <link rel="stylesheet" crossorigin href="/style.css" />
+    {{ if .Data }}
+    <script id="state" type="application/json">
+      {{ .Data }}
+    </script>
+    {{ end }}
+  </head>
+
+  <body>
+    <header class="header">
+      <form class="header-form" onsubmit="addInstance(); return false">
+        <input
+          type="url"
+          class="header-input"
+          id="manifestUrl"
+          placeholder="Enter a IIIF manifest URL"
+          aria-label="Manifest URL"
+          onfocus="event.target.select()"
+        />
+        <button type="submit" class="button">Load</button>
+        <button
+          id="savex"
+          type="reset"
+          class="button"
+          onclick="save()"
+          disabled
+          style="background-color: grey"
+        >
+          Create link
+        </button>
+      </form>
+    </header>
+    <main class="main">
+      <div class="instance">
+        <header class="instance-header">
+          <button class="button instance-close" aria-label="Remove instance">
+            &times;
+          </button>
+        </header>
+        <div class="instance-tify"></div>
+      </div>
+    </main>
+    <div class="footer-text">
+      Powered by <a href="https://tify.rocks">Tify Viewer</a> - Hosted by
+      <a href="https://atomotic.com">atomotic.com</a>
+    </div>
+
+    <script>
+      const tifyOptions = {
+        translationsDirUrl: "/translations",
+      };
+
+      const main = document.querySelector("main");
+      const manifestUrlInput = document.querySelector("#manifestUrl");
+      const template = document.querySelector(".instance");
+      template.remove();
+
+      const instances = [];
+      window.instances = instances;
+
+      window.onload = () => {
+        if (document.getElementById("state") !== null) {
+          manifestUrlInput.readOnly = true;
+          manifestUrlInput.style.color = "red";
+          manifestUrlInput.value = window.location;
+          const buttons = document.querySelectorAll(".button");
+          buttons.forEach((button) => {
+            button.remove();
+          });
+
+          var states = JSON.parse(
+            JSON.parse(document.getElementById("state").textContent)
+          );
+          console.log(states)
+          for (const state in states) {
+            pages = states[state]["options"]["pages"] ? states[state]["options"]["pages"] : null
+            addInstance({
+              key: state,
+              manifestUrl: states[state]["manifest"],
+              pan: states[state]["options"]["pan"],
+              zoom: states[state]["options"]["zoom"],
+              view: states[state]["options"]["view"],
+              pages: pages,
+            });
+          }
+        } else {
+          const url = new URL(window.location);
+          for (const params of url.searchParams) {
+            if (!params[0].startsWith("manifest")) {
+              continue;
+            }
+            const key = parseInt(params[0].replace("manifest", ""), 10) || "";
+            console.log(key);
+            addInstance({
+              key,
+              manifestUrl: params[1],
+              urlQueryKey: `tify${key}`,
+            });
+          }
+        }
+      };
+
+      function addInstance(options = {}) {
+        element = template.cloneNode(true);
+        main.append(element);
+
+        let key = options.key || "";
+        while (instances.find((instance) => instance.key === key)) {
+          key = (key || 0) + 1;
+        }
+
+        tifyOptions.container = element.querySelector(".instance-tify");
+        tifyOptions.manifestUrl = options.manifestUrl || manifestUrlInput.value;
+        {{ if not .Data }}
+        tifyOptions.urlQueryKey = options.urlQueryKey || `tify${key}`;
+        {{ end }}
+        {{ if  .Data }}
+        tifyOptions.pan = options.pan;
+        tifyOptions.zoom = options.zoom;
+        tifyOptions.view = options.view;
+        tifyOptions.pages = options.pages;
+        {{ end }}
+
+        const tify = new Tify(tifyOptions);
+
+        tify.ready.then(() => {
+          const savebutton = document.getElementById("savex");
+          savebutton.disabled = false;
+          savebutton.style.backgroundColor = "red";
+        });
+
+        const instance = { element, key, tify };
+        instances.push(instance);
+
+        window.tify = tify;
+
+        element.querySelector(".instance-close").onclick = () =>
+          removeInstance(instance);
+
+        if (!options.manifestUrl) {
+          const url = new URL(window.location);
+          url.searchParams.append(`manifest${key}`, tifyOptions.manifestUrl);
+          window.history.pushState(null, "", url.toString());
+        }
+      }
+
+      function removeInstance(instanceToRemove) {
+        instanceToRemove.element.remove();
+        instanceToRemove.tify.destroy();
+
+        instances.splice(
+          instances.findIndex(
+            (instance) => instance.key === instanceToRemove.key
+          ),
+          1
+        );
+
+        const url = new URL(window.location);
+        url.searchParams.delete(`manifest${instanceToRemove.key}`);
+        url.searchParams.delete(`tify${instanceToRemove.key}`);
+        window.history.pushState(null, "", url.toString());
+      }
+
+      function removeAllInstances() {
+        [...instances].forEach((instance) => removeInstance(instance));
+      }
+
+      async function save() {
+        const tifyParams = window.location.search;
+
+        const formData = new FormData();
+        formData.append("tifyParams", tifyParams);
+
+        const response = await fetch("/save", {
+          method: "POST",
+          body: formData,
+        });
+        const responseText = await response.text();
+
+        manifestUrlInput.readOnly = true;
+        manifestUrlInput.style.color = "red";
+        manifestUrlInput.value = `https://iiif.link/id/${responseText}`;
+        const buttons = document.querySelectorAll(".button");
+        buttons.forEach((button) => {
+          button.disabled = true;
+          button.style.backgroundColor = "gray";
+        });
+      }
+    </script>
+  </body>
+</html>

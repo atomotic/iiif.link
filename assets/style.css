@@ -1,0 +1,102 @@
+:root {
+    --base-color: rgb(187, 31, 0);
+    --button-hover-bg: #0058a2;
+  }
+
+  html {
+    color: #333;
+    background: #666;
+    font-size: 24px;
+  }
+
+  body {
+    font: 16px/1rem sans-serif;
+    /* font: Helvetica, Arial, sans-serif; */
+    margin: 0;
+  }
+
+  .button {
+    background: var(--base-color);
+    border: 0;
+    color: #fff;
+    cursor: pointer;
+    font: 0.9em/1rem monospace;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+  }
+
+  .button + .button {
+    border-left: 1px solid;
+  }
+
+  .button:focus,
+  .button:hover {
+    background: var(--button-hover-bg);
+    opacity: 1 !important;
+  }
+
+  .header-form {
+    display: flex;
+    position: relative;
+    z-index: 2;
+  }
+
+  .header-input {
+    border: 0;
+    box-shadow: 0 -1px inset;
+    flex: 1;
+    font: 0.9em/1rem monospace;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .header-input:focus {
+    box-shadow: 0 0 0 1px var(--base-color) inset;
+    outline: 0;
+  }
+
+  .main {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .instance {
+    box-shadow: -1px 0, 0 -1px;
+    flex: 1;
+    position: relative;
+    z-index: 1;
+  }
+
+  .instance-header {
+    backdrop-filter: blur(1px);
+    display: flex;
+    position: absolute;
+    top: 0;
+    z-index: 10;
+  }
+
+  .instance-close {
+    backdrop-filter: blur(1px);
+		clip-path: polygon(0 0, 100% 0, 0 100%);
+		height: 1.25rem;
+		line-height: 1;
+    opacity: 0.5;
+    padding: 0 .5rem .5rem 0;
+    width: 1.25rem;
+  }
+
+  .instance-tify {
+    height: calc(100vh - 1.5rem);
+  }
+  .footer-text {
+    position: fixed;
+    bottom: 0px;
+    right: 0px;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    padding: 0px 1px;
+    line-height: 1.5;
+    font-size: 13px;
+    color: #555;
+    margin: 0;
+    z-index: 9999;
+  }
