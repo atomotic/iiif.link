@@ -2,12 +2,15 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"zombiezen.com/go/sqlite"
@@ -20,48 +23,35 @@ var staticFiles embed.FS
 var dbpool *sqlitex.Pool
 var assets http.Handler
 
+var tmpl = template.Must(template.ParseFS(staticFiles, "assets/index.html"))
+
+// linkMeta is our own derived metadata — NOT viewer state. Captured by the
+// client at save time and stored verbatim in the meta column. Title/Thumbnail
+// fill OG/Twitter tags; Canvas/ContentState are replayed into the X-IIIF-*
+// discovery headers. Region xywh in ContentState depends on the live browser
+// viewport, so it must be computed client-side, not reconstructed in Go.
+type linkMeta struct {
+	Title        string `json:"title"`
+	Thumbnail    string `json:"thumbnail"`
+	Canvas       string `json:"canvas,omitempty"`
+	ContentState string `json:"contentState,omitempty"`
+}
+
+type pageData struct {
+	ID   string
+	Data string
+	Meta *linkMeta
+}
+
 func index(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		assets.ServeHTTP(w, r)
 		return
 	}
 
-	tmpl, err := template.ParseFS(staticFiles, "assets/index.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = tmpl.Execute(w, nil)
-
-	if err != nil {
+	if err := tmpl.Execute(w, pageData{}); err != nil {
 		slog.Error("error", "err", err)
 	}
-}
-
-func redirect(w http.ResponseWriter, r *http.Request) {
-	var redir string
-	conn, _ := dbpool.Take(r.Context())
-	if conn == nil {
-		return
-	}
-	defer dbpool.Put(conn)
-
-	id := r.PathValue("id")
-
-	err := sqlitex.ExecuteTransient(conn, "SELECT urlparams FROM links WHERE public_id=?;",
-		&sqlitex.ExecOptions{
-			Args: []interface{}{id},
-			ResultFunc: func(stmt *sqlite.Stmt) error {
-				redir = stmt.ColumnText(0)
-				return nil
-			},
-		})
-	if err != nil {
-		slog.Error("error", "err", err)
-		http.Error(w, "error", http.StatusInternalServerError)
-	}
-
-	slog.Info("redirect", "id", id)
-	http.Redirect(w, r, fmt.Sprintf("/%s", redir), http.StatusSeeOther)
 }
 
 func get(w http.ResponseWriter, r *http.Request) {
@@ -73,13 +63,17 @@ func get(w http.ResponseWriter, r *http.Request) {
 
 	id := r.PathValue("id")
 
-	var state string
+	var state, metaRaw, manifest string
+	var page int
 	results := false
-	err := sqlitex.ExecuteTransient(conn, "SELECT data FROM links WHERE public_id=?;",
+	err := sqlitex.ExecuteTransient(conn, "SELECT data, meta, json_extract(data,'$.manifestUrl'), json_extract(data,'$.pages[0]') FROM links WHERE public_id=?;",
 		&sqlitex.ExecOptions{
 			Args: []interface{}{id},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				state = stmt.ColumnText(0)
+				metaRaw = stmt.ColumnText(1)
+				manifest = stmt.ColumnText(2)
+				page = stmt.ColumnInt(3)
 				results = state != "null"
 				return nil
 			},
@@ -93,21 +87,34 @@ func get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type Output struct {
-		ID   string
-		Data string
+	var m linkMeta
+	hasMeta := metaRaw != "" && metaRaw != "null" && json.Unmarshal([]byte(metaRaw), &m) == nil
+
+	// X-IIIF-* discovery headers
+	if manifest != "" {
+		w.Header().Set("X-IIIF-Manifest", manifest)
+	}
+	if page > 0 {
+		w.Header().Set("X-IIIF-Page", strconv.Itoa(page))
+	}
+	if hasMeta && m.Canvas != "" {
+		w.Header().Set("X-IIIF-Canvas", m.Canvas)
+	}
+	if hasMeta && m.ContentState != "" {
+		w.Header().Set("X-IIIF-Content-State", m.ContentState)
 	}
 
-	tmpl, err := template.ParseFS(staticFiles, "assets/index.html")
-	if err != nil {
-		log.Fatal(err)
+	var meta *linkMeta
+	if hasMeta && (m.Title != "" || m.Thumbnail != "") {
+		if m.Title == "" {
+			m.Title = "IIIF document"
+		}
+		meta = &m
 	}
-	err = tmpl.Execute(w, Output{ID: id, Data: state})
 
-	if err != nil {
+	if err = tmpl.Execute(w, pageData{ID: id, Data: state, Meta: meta}); err != nil {
 		slog.Error("error", "err", err)
 	}
-
 }
 
 func save(w http.ResponseWriter, r *http.Request) {
@@ -121,15 +128,35 @@ func save(w http.ResponseWriter, r *http.Request) {
 		}
 		defer dbpool.Put(conn)
 
-		err := r.ParseMultipartForm(1)
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 		if err != nil {
 			slog.Error("save", "err", err)
 			http.Error(w, "error", http.StatusBadRequest)
 			return
 		}
 
-		params := r.FormValue("tifyParams")
-		jsonparams, _ := Tify(params)
+		var payload struct {
+			State json.RawMessage `json:"state"`
+			Meta  json.RawMessage `json:"meta"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			slog.Error("save", "err", err)
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+
+		var probe interface{}
+		if err := json.Unmarshal(payload.State, &probe); err != nil {
+			slog.Error("save", "err", err)
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		state := payload.State
+
+		var meta []byte
+		if len(payload.Meta) > 0 && string(payload.Meta) != "null" {
+			meta = []byte(payload.Meta)
+		}
 
 		public_id, err := gonanoid.Generate("0123456789abcdefghijklmnopqrstuvwxyz", 12)
 		if err != nil {
@@ -138,9 +165,9 @@ func save(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = sqlitex.Execute(conn, "INSERT INTO links (public_id, urlparams, data) VALUES (?,?,?)",
+		err = sqlitex.Execute(conn, "INSERT INTO links (public_id, data, meta) VALUES (?,?,?)",
 			&sqlitex.ExecOptions{
-				Args: []interface{}{public_id, params, jsonparams.Json()},
+				Args: []interface{}{public_id, []byte(state), meta},
 			})
 		if err != nil {
 			slog.Error("save", "err", err)
@@ -174,7 +201,6 @@ func main() {
 	mux.HandleFunc("GET /", index)
 	mux.HandleFunc("POST /save", save)
 	mux.HandleFunc("GET /id/{id}", get)
-	mux.HandleFunc("GET /r/{id}", redirect)
 
 	slog.Info("iiif.link # http://localhost:3000")
 	err = http.ListenAndServe(":3000", mux)
