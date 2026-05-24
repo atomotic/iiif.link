@@ -1,201 +1,416 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="/icon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    {{ with .Meta }}
+    <title>{{ .Title }} · iiif.link</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="iiif.link" />
+    <meta property="og:url" content="https://iiif.link/id/{{ $.ID }}" />
+    <meta property="og:title" content="{{ .Title }}" />
+    <meta property="og:description" content="A IIIF document view, shared via iiif.link" />
+    <meta name="twitter:title" content="{{ .Title }}" />
+    {{ if .Thumbnail }}
+    <meta property="og:image" content="{{ .Thumbnail }}" />
+    <meta name="twitter:image" content="{{ .Thumbnail }}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    {{ else }}
+    <meta name="twitter:card" content="summary" />
+    {{ end }} {{ else }}
     <title>iiif.link</title>
+    {{ end }}
     <script type="module" crossorigin src="/tify.js"></script>
     <link rel="stylesheet" crossorigin href="/tify.css" />
     <link rel="stylesheet" crossorigin href="/style.css" />
     {{ if .Data }}
-    <script id="state" type="application/json">
-      {{ .Data }}
+    <script>
+      window.__STATE__ = JSON.parse({{ .Data }});
     </script>
     {{ end }}
   </head>
 
   <body>
     <header class="header">
-      <form class="header-form" onsubmit="addInstance(); return false">
-        <input
-          type="url"
-          class="header-input"
-          id="manifestUrl"
-          placeholder="Enter a IIIF manifest URL"
-          aria-label="Manifest URL"
-          onfocus="event.target.select()"
-        />
-        <button type="submit" class="button">Load</button>
-        <button
-          id="savex"
-          type="reset"
-          class="button"
-          onclick="save()"
-          disabled
-          style="background-color: grey"
-        >
-          Create link
-        </button>
+      <form
+        class="header-form"
+        onsubmit="
+          loadManifest();
+          return false;
+        "
+      >
+        <a href="/" class="header-brand" title="Start a new link" aria-label="iiif.link — start a new link"><span class="logo-b">i</span><span class="logo-r">i</span><span class="logo-b">i</span><span class="logo-r">f</span><span class="logo-dot">.</span><span class="logo-link">link</span></a>
+        <input type="url" class="header-input" id="manifestUrl" placeholder="Paste a IIIF manifest URL…" aria-label="IIIF manifest URL" onfocus="event.target.select()" />
+        <button type="submit" class="button button-load" id="loadBtn" disabled>View</button>
+        <button id="savex" type="button" class="button button-primary" onclick="save()" disabled title="Save the current view and get a shareable link">Create link</button>
+        <button type="button" class="button button-icon" aria-label="About iiif.link" title="About &amp; help" onclick="openModal()">i</button>
       </form>
     </header>
+
     <main class="main">
       <div class="instance">
-        <header class="instance-header">
-          <button class="button instance-close" aria-label="Remove instance">
-            &times;
-          </button>
-        </header>
+        <div class="placeholder" id="placeholder">
+          <div class="placeholder-logo"><span class="logo-b">i</span><span class="logo-r">i</span><span class="logo-b">i</span><span class="logo-r">f</span><span class="logo-dot">.</span><span class="logo-link">link</span></div>
+          <p class="placeholder-intro">
+            Open any IIIF document, frame the exact page, zoom and region.<br />
+            Create one short link that reopens that precise view, anywhere.
+          </p>
+        </div>
         <div class="instance-tify"></div>
       </div>
     </main>
+
     <div class="footer-text">
       Powered by
-      <a href="https://github.com/tify-iiif-viewer/tify">Tify Viewer</a> -
-      Hosted by
-      <a href="https://atomotic.com">atomotic.com</a>
+      <a href="https://github.com/tify-iiif-viewer/tify" target="_blank">Tify</a>
+      ·
+      <a href="https://atomotic.com" target="_blank">atomotic.com</a>
+    </div>
+
+    <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" onclick="if (event.target === this) closeModal();">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h1 id="modalTitle"><span class="logo-b">i</span><span class="logo-r">i</span><span class="logo-b">i</span><span class="logo-r">f</span><span class="logo-dot">.</span><span class="logo-link">link</span></h1>
+          <button class="modal-close" aria-label="Close" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p>
+            A link shortener for <strong>IIIF</strong> document views. Open any IIIF manifest, frame the exact page, zoom and pan you want, then mint a short permanent link that reopens that precise
+            view.
+          </p>
+
+          <h2>How to use</h2>
+          <ol>
+            <li>Paste a IIIF manifest URL and press <strong>View</strong>.</li>
+            <li>Navigate: turn pages, zoom, pan, rotate, toggle layers.</li>
+            <li>Press <strong>Create link</strong> — the field becomes your shareable URL, copied to the clipboard.</li>
+            <li>Anyone opening the link lands on the same view.</li>
+          </ol>
+
+          <h2>About</h2>
+          <p>
+            Built on the
+            <a href="https://tify.rocks/" target="_blank">Tify</a> viewer.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="csModal" role="dialog" aria-modal="true" aria-labelledby="csTitle" onclick="if (event.target === this) closeCsModal();">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h1 id="csTitle">IIIF Content State</h1>
+          <button class="modal-close" aria-label="Close" onclick="closeCsModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="csNote">
+            Annotation targeting the selected resource, per the
+            <a href="https://iiif.io/api/content-state/1.0/" target="_blank">IIIF Content State API 1.0</a>.
+          </p>
+          <h2>JSON-LD</h2>
+          <pre id="csJson" class="cs-pre"></pre>
+          <button type="button" class="button button-load cs-copy" onclick="copyCs('csJson', this)">Copy</button>
+          <h2>Encoded (iiif-content)</h2>
+          <pre id="csEnc" class="cs-pre"></pre>
+          <button type="button" class="button button-load cs-copy" onclick="copyCs('csEnc', this)">Copy</button>
+        </div>
+      </div>
     </div>
 
     <script>
-      const tifyOptions = {
-        translationsDirUrl: "/translations",
-      };
+      // Option keys TIFY treats as viewer state (its urlQueryParams set).
+      const STATE_KEYS = ["annotationId", "annotationsVisible", "childManifestUrl", "layers", "filters", "pages", "pan", "rotation", "view", "zoom"];
 
-      const main = document.querySelector("main");
+      const container = document.querySelector(".instance-tify");
       const manifestUrlInput = document.querySelector("#manifestUrl");
-      const template = document.querySelector(".instance");
-      template.remove();
+      const saveButton = document.getElementById("savex");
+      const loadButton = document.getElementById("loadBtn");
+      const modal = document.getElementById("modal");
+      let tify = null;
 
-      const instances = [];
-      window.instances = instances;
+      function openModal() {
+        modal.classList.add("open");
+      }
+      function closeModal() {
+        modal.classList.remove("open");
+      }
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closeModal();
+          closeCsModal();
+        }
+      });
+
+      function mount(options) {
+        const ph = document.getElementById("placeholder");
+        if (ph) ph.remove();
+        if (tify) tify.destroy();
+        tify = new Tify({ ...options, container });
+        window.tify = tify;
+        saveButton.disabled = true;
+        tify.ready.then(() => {
+          saveButton.disabled = false;
+        });
+      }
+
+      // Enable View only when the field holds a URL.
+      manifestUrlInput.addEventListener("input", () => {
+        loadButton.disabled = manifestUrlInput.value.trim() === "";
+      });
+
+      function loadManifest() {
+        const url = manifestUrlInput.value.trim();
+        if (!url) return;
+        mount({ manifestUrl: url });
+      }
+
+      // Show the share link in the input, hide load/create, expose Copy.
+      function showShareLink(url) {
+        manifestUrlInput.readOnly = true;
+        manifestUrlInput.classList.add("is-link");
+        manifestUrlInput.value = url;
+        loadButton.remove();
+
+        saveButton.classList.remove("is-busy", "button-primary");
+        saveButton.classList.add("button-load");
+        saveButton.disabled = false;
+        saveButton.textContent = "Copy link";
+        saveButton.onclick = () => copyLink(url);
+
+        if (!document.getElementById("csBtn")) {
+          const btn = document.createElement("button");
+          btn.id = "csBtn";
+          btn.type = "button";
+          btn.className = "button button-primary";
+          btn.textContent = "Export Content-State";
+          btn.title = "IIIF Content State for the selected resource";
+          btn.onclick = openCsModal;
+          saveButton.insertAdjacentElement("afterend", btn);
+        }
+      }
+
+      async function copyLink(url) {
+        try {
+          await navigator.clipboard.writeText(url);
+          saveButton.textContent = "Copied ✓";
+          setTimeout(() => (saveButton.textContent = "Copy link"), 1600);
+        } catch {
+          manifestUrlInput.select();
+        }
+      }
+
+      function closeCsModal() {
+        document.getElementById("csModal").classList.remove("open");
+      }
+
+      function base64url(str) {
+        const bytes = new TextEncoder().encode(str);
+        let bin = "";
+        bytes.forEach((b) => (bin += String.fromCharCode(b)));
+        return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      }
+
+      // Resolve the Canvas (id + pixel size) for the current page.
+      async function resolveCanvas(manifestUrl, pageIndex) {
+        try {
+          const m = await (await fetch(manifestUrl)).json();
+          const c = Array.isArray(m.items)
+            ? m.items[pageIndex] // v3
+            : m.sequences?.[0]?.canvases?.[pageIndex]; // v2
+          if (!c) return null;
+          return {
+            id: c.id || c["@id"],
+            width: c.width,
+            height: c.height,
+          };
+        } catch {
+          return null;
+        }
+      }
+
+      // Current viewport as a Canvas-pixel xywh, or null.
+      // OSD viewport coords are in image-width units (image width = 1).
+      function viewportXYWH(canvasW, canvasH) {
+        try {
+          const b = window.tify.viewer.viewport.getBounds(true);
+          let x = Math.round(b.x * canvasW);
+          let y = Math.round(b.y * canvasW);
+          let w = Math.round(b.width * canvasW);
+          let h = Math.round(b.height * canvasW);
+          x = Math.max(0, Math.min(x, canvasW));
+          y = Math.max(0, Math.min(y, canvasH));
+          w = Math.max(1, Math.min(w, canvasW - x));
+          h = Math.max(1, Math.min(h, canvasH - y));
+          // Whole page in view → not a meaningful selection.
+          if (x === 0 && y === 0 && w >= canvasW && h >= canvasH) return null;
+          return `${x},${y},${w},${h}`;
+        } catch {
+          return null;
+        }
+      }
+
+      async function buildContentState() {
+        const o = tify.options;
+        const manifestUrl = o.manifestUrl;
+        const page = (o.pages && o.pages[0]) || 1;
+        const canvas = await resolveCanvas(manifestUrl, page - 1);
+        const note = document.getElementById("csNote");
+
+        let target;
+        if (!canvas?.id) {
+          target = { id: manifestUrl, type: "Manifest" };
+          note.dataset.fallback = "manifest";
+        } else {
+          const canvasRef = {
+            id: canvas.id,
+            type: "Canvas",
+            partOf: [{ id: manifestUrl, type: "Manifest" }],
+          };
+          const xywh = canvas.width && canvas.height ? viewportXYWH(canvas.width, canvas.height) : null;
+          if (xywh) {
+            target = {
+              type: "SpecificResource",
+              source: canvasRef,
+              selector: {
+                type: "FragmentSelector",
+                conformsTo: "http://www.w3.org/TR/media-frags/",
+                value: `xywh=${xywh}`,
+              },
+            };
+            note.dataset.fallback = "region";
+          } else {
+            target = canvasRef;
+            note.dataset.fallback = "canvas";
+          }
+        }
+
+        return {
+          "@context": "http://iiif.io/api/presentation/3/context.json",
+          id: "https://iiif.link/content-state",
+          type: "Annotation",
+          motivation: ["contentState"],
+          target,
+        };
+      }
+
+      async function openCsModal() {
+        const jsonEl = document.getElementById("csJson");
+        const encEl = document.getElementById("csEnc");
+        const note = document.getElementById("csNote");
+        document.getElementById("csModal").classList.add("open");
+        jsonEl.textContent = "Resolving…";
+        encEl.textContent = "";
+
+        const cs = await buildContentState();
+        const json = JSON.stringify(cs, null, 2);
+        jsonEl.textContent = json;
+        encEl.textContent = base64url(json);
+        const notes = {
+          region:
+            "Targets the current viewport as a pixel region " +
+            "(<code>xywh</code>) on the Canvas, per the " +
+            '<a href="https://iiif.io/api/content-state/1.0/" ' +
+            'target="_blank">Content State API 1.0</a>.',
+          canvas: "Targets the Canvas, per the " + '<a href="https://iiif.io/api/content-state/1.0/" target="_blank">Content State API 1.0</a>.',
+          manifest: "Manifest-level state — Canvas id could not be resolved " + "(manifest fetch blocked by CORS, or page not found).",
+        };
+        note.innerHTML = notes[note.dataset.fallback] || notes.manifest;
+      }
+
+      function copyCs(id, btn) {
+        navigator.clipboard.writeText(document.getElementById(id).textContent).then(() => {
+          const t = btn.textContent;
+          btn.textContent = "Copied ✓";
+          setTimeout(() => (btn.textContent = t), 1600);
+        });
+      }
 
       window.onload = () => {
-        if (document.getElementById("state") !== null) {
-          manifestUrlInput.readOnly = true;
-          manifestUrlInput.style.color = "red";
-          manifestUrlInput.value = window.location;
-          const buttons = document.querySelectorAll(".button");
-          buttons.forEach((button) => {
-            button.remove();
-          });
-
-          var states = JSON.parse(
-            JSON.parse(document.getElementById("state").textContent)
-          );
-          console.log(states)
-          for (const state in states) {
-            pages = states[state]["options"]["pages"] ? states[state]["options"]["pages"] : null
-            addInstance({
-              key: state,
-              manifestUrl: states[state]["manifest"],
-              pan: states[state]["options"]["pan"],
-              zoom: states[state]["options"]["zoom"],
-              view: states[state]["options"]["view"],
-              pages: pages,
-            });
-          }
-        } else {
-          const url = new URL(window.location);
-          for (const params of url.searchParams) {
-            if (!params[0].startsWith("manifest")) {
-              continue;
-            }
-            const key = parseInt(params[0].replace("manifest", ""), 10) || "";
-            console.log(key);
-            addInstance({
-              key,
-              manifestUrl: params[1],
-              urlQueryKey: `tify${key}`,
-            });
-          }
+        const tifyOptions = { translationsDirUrl: "/translations" };
+        if (window.__STATE__) {
+          // Restore: spread the saved state verbatim. Full fidelity.
+          mount({ ...tifyOptions, ...window.__STATE__ });
+          showShareLink(window.location.href);
         }
       };
 
-      function addInstance(options = {}) {
-        element = template.cloneNode(true);
-        main.append(element);
-
-        let key = options.key || "";
-        while (instances.find((instance) => instance.key === key)) {
-          key = (key || 0) + 1;
-        }
-
-        tifyOptions.container = element.querySelector(".instance-tify");
-        tifyOptions.manifestUrl = options.manifestUrl || manifestUrlInput.value;
-        {{ if not .Data }}
-        tifyOptions.urlQueryKey = options.urlQueryKey || `tify${key}`;
-        {{ end }}
-        {{ if  .Data }}
-        tifyOptions.pan = options.pan;
-        tifyOptions.zoom = options.zoom;
-        tifyOptions.view = options.view;
-        tifyOptions.pages = options.pages;
-        {{ end }}
-
-        const tify = new Tify(tifyOptions);
-
-        tify.ready.then(() => {
-          const savebutton = document.getElementById("savex");
-          savebutton.disabled = false;
-          savebutton.style.backgroundColor = "red";
-        });
-
-        const instance = { element, key, tify };
-        instances.push(instance);
-
-        window.tify = tify;
-
-        element.querySelector(".instance-close").onclick = () =>
-          removeInstance(instance);
-
-        if (!options.manifestUrl) {
-          const url = new URL(window.location);
-          url.searchParams.append(`manifest${key}`, tifyOptions.manifestUrl);
-          window.history.pushState(null, "", url.toString());
-        }
-      }
-
-      function removeInstance(instanceToRemove) {
-        instanceToRemove.element.remove();
-        instanceToRemove.tify.destroy();
-
-        instances.splice(
-          instances.findIndex(
-            (instance) => instance.key === instanceToRemove.key
-          ),
-          1
-        );
-
-        const url = new URL(window.location);
-        url.searchParams.delete(`manifest${instanceToRemove.key}`);
-        url.searchParams.delete(`tify${instanceToRemove.key}`);
-        window.history.pushState(null, "", url.toString());
-      }
-
-      function removeAllInstances() {
-        [...instances].forEach((instance) => removeInstance(instance));
-      }
-
       async function save() {
-        const tifyParams = window.location.search;
+        // Read live state straight from the viewer — no URL parsing.
+        const o = tify.options;
+        const state = { manifestUrl: o.manifestUrl };
+        for (const k of STATE_KEYS) {
+          if (o[k] !== null && o[k] !== undefined) state[k] = o[k];
+        }
 
-        const formData = new FormData();
-        formData.append("tifyParams", tifyParams);
+        // Derived metadata for social previews — read from the manifest
+        // TIFY already loaded. Not viewer state; stored separately.
+        let meta = null;
+        try {
+          // Store is a Vue app global, not a property of the Tify instance.
+          const s = tify.app.config.globalProperties.$store;
+          const page = (state.pages && state.pages[0]) || 1;
+          const title = (s.localize(s.manifest.label) || "").trim();
+          let thumbnail = s.getThumbnailUrl(page, 1200) || "";
+          // Crop the preview to the current viewport when it is a real
+          // IIIF Image service URL (.../full/{w},/0/default.jpg) and the
+          // view is a sub-region — not the whole page, not a static thumb.
+          const item = s.manifest.items[page - 1];
+          if (thumbnail.includes("/full/") && item && item.width && item.height) {
+            const xywh = viewportXYWH(item.width, item.height);
+            if (xywh) thumbnail = thumbnail.replace("/full/", `/${xywh}/`);
+          }
+          if (title || thumbnail) meta = { title, thumbnail };
+        } catch (e) {
+          console.warn("meta extraction failed:", e);
+        }
 
-        const response = await fetch("/save", {
-          method: "POST",
-          body: formData,
-        });
-        const responseText = await response.text();
+        // IIIF content-state + canvas id for the X-IIIF-* HEAD headers.
+        // buildContentState() resolves the canvas and (when meaningful) the
+        // live viewport region — neither is reconstructible server-side, so
+        // compute here and persist into meta for replay.
+        try {
+          const cs = await buildContentState();
+          const t = cs.target;
+          const canvas = t.type === "SpecificResource" ? t.source?.id : t.type === "Canvas" ? t.id : null;
+          meta = meta || {};
+          meta.contentState = base64url(JSON.stringify(cs));
+          if (canvas) meta.canvas = canvas;
+        } catch (e) {
+          console.warn("content-state extraction failed:", e);
+        }
 
-        manifestUrlInput.readOnly = true;
-        manifestUrlInput.style.color = "red";
-        manifestUrlInput.value = `https://iiif.link/id/${responseText}`;
-        const buttons = document.querySelectorAll(".button");
-        buttons.forEach((button) => {
-          button.disabled = true;
-          button.style.backgroundColor = "gray";
-        });
+        saveButton.disabled = true;
+        saveButton.classList.add("is-busy");
+        saveButton.textContent = "Creating…";
+
+        try {
+          const response = await fetch("/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ state, meta }),
+          });
+          if (!response.ok) throw new Error(await response.text());
+          const id = await response.text();
+          const url = `https://iiif.link/id/${id}`;
+
+          showShareLink(url);
+          // Reflect the saved state in the address bar so reload/bookmark/
+          // share-from-URL all resolve to this link. Relative path keeps it
+          // origin-correct in dev (localhost) too. replaceState, not push:
+          // the bare "/" had no shareable state worth a back-button entry.
+          history.replaceState(null, "", `/id/${id}`);
+          try {
+            await navigator.clipboard.writeText(url);
+            saveButton.textContent = "Copied ✓";
+            setTimeout(() => (saveButton.textContent = "Copy link"), 1600);
+          } catch {}
+        } catch (err) {
+          saveButton.classList.remove("is-busy");
+          saveButton.disabled = false;
+          saveButton.textContent = "Retry";
+          console.error("save failed:", err);
+        }
       }
     </script>
   </body>
